@@ -5,6 +5,11 @@
 logs/
 *.log
 
+# wandb 관련 파일
+wandb/
+**/wandb/
+shell/wandb/
+
 # 모델 및 데이터 파일
 model/
 dataset_sample/*.json
