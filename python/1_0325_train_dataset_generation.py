@@ -223,6 +223,7 @@ def generate_outputs_for_multiple_questions(
             prompt_metadata.append({
                 "question_id": qid,
                 "ground_truth_letter": correct_letter,
+                "data_source": qdata.get("type", "")  # type 필드를 data_source로 저장
             })
 
     # 2) vLLM 호출 (chat 모드)
@@ -231,7 +232,8 @@ def generate_outputs_for_multiple_questions(
     # 3) question_id별 결과 묶기
     results_by_question = defaultdict(lambda: {
         "generated_texts": [],
-        "correct_count": 0
+        "correct_count": 0,
+        "data_source": ""  # data_source 필드 추가
     })
 
     for i, output in enumerate(outputs):
@@ -239,12 +241,14 @@ def generate_outputs_for_multiple_questions(
         meta = prompt_metadata[i]
         question_id = meta["question_id"]
         ground_truth_letter = meta["ground_truth_letter"]
+        data_source = meta["data_source"]  # data_source 가져오기
 
         model_answer = extract_answer_from_text(generated_text)
         if model_answer == ground_truth_letter:
             results_by_question[question_id]["correct_count"] += 1
 
         results_by_question[question_id]["generated_texts"].append(generated_text)
+        results_by_question[question_id]["data_source"] = data_source  # data_source 저장
 
     # 4) 문제별 accuracy & step 길이 필터링
     filtered_results = {}
@@ -253,12 +257,14 @@ def generate_outputs_for_multiple_questions(
         data_dict = results_by_question[qid]
         correct_count = data_dict["correct_count"]
         generated_texts = data_dict["generated_texts"]
+        data_source = data_dict["data_source"]  # data_source 가져오기
 
         accuracy = correct_count / repeat_count if repeat_count > 0 else 0.0
 
         print(f"\n{'='*80}")
         print(f"[Question {qid}] Accuracy: {accuracy:.2f} (Correct: {correct_count}/{repeat_count})")
         print(f"Ground Truth: {correct_letter}")
+        print(f"Data Source: {data_source}")  # data_source 출력
         print("Generated Solutions:")
         
         # 스텝 수 필터 (2 < step < 8)
@@ -279,7 +285,8 @@ def generate_outputs_for_multiple_questions(
         filtered_results[qid] = {
             "solutions": step_filtered_texts,
             "accuracy": accuracy,
-            "full_question": full_question  # full_question 추가
+            "full_question": full_question,  # full_question 추가
+            "data_source": data_source  # data_source 추가
         }
 
         print(f"Filtered Solutions Count: {len(filtered_results[qid]['solutions'])}")
@@ -307,7 +314,8 @@ def create_labeled_data_for_multiple_questions(
         question_meta[qid] = {
             "question": q["question"],  # 원본문
             "ground_truth_letter": correct_letter,
-            "full_question": full_question  # full_question 추가
+            "full_question": full_question,  # full_question 추가
+            "data_source": q.get("type", "")  # type 필드를 data_source로 저장
         }
 
     partial_solutions_list = []
@@ -326,6 +334,7 @@ def create_labeled_data_for_multiple_questions(
         "question": "",
         "correct_answer": "",
         "accuracy": 0.0,
+        "data_source": "",  # data_source 필드 추가
         "solutions": []
     })
 
@@ -338,11 +347,13 @@ def create_labeled_data_for_multiple_questions(
         question_text = q["question"]
         gt_letter = question_meta[qid]["ground_truth_letter"]
         full_question = question_meta[qid]["full_question"]  # full_question 가져오기
+        data_source = q.get("type", "")  # type 필드를 data_source로 가져오기
 
         results_for_all[qid]["question_id"] = qid
         results_for_all[qid]["question"] = question_text
         results_for_all[qid]["correct_answer"] = gt_letter
         results_for_all[qid]["accuracy"] = filtered_results[qid]["accuracy"]
+        results_for_all[qid]["data_source"] = data_source  # data_source 저장
 
         sols = filtered_results[qid]["solutions"]
         for sol_index, sol_text in enumerate(sols):
@@ -460,7 +471,20 @@ def create_labeled_data_for_multiple_questions(
             results_for_all[qid]["solutions"][sol_idx]["prm_hard_label"] = prm_hard_label
             results_for_all[qid]["solutions"][sol_idx]["orm_label"] = orm_label
 
-    # (D) 결과 저장
+    # (D) 결과 저장 전 answer가 null이거나 "T"인 solution 필터링
+    for qid in results_for_all:
+        filtered_solutions = []
+        for solution in results_for_all[qid]["solutions"]:
+            if solution["answer"] is not None and solution["answer"] != "T":
+                filtered_solutions.append(solution)
+        
+        # 필터링된 솔루션으로 교체
+        results_for_all[qid]["solutions"] = filtered_solutions
+        
+        # 필터링 결과 출력
+        print(f"[Question {qid}] 필터링 후 솔루션 수: {len(filtered_solutions)}")
+
+    # (E) 결과 저장
     try:
         final_results_list = list(results_for_all.values())
         with open(output_file_path, "w", encoding="utf-8") as f:
@@ -544,7 +568,8 @@ def main():
     )
 
     # (B) 2차 레이블 (중간 스텝 정답 판별)
-    output_file = f"{args.output_dir}/train_dataset_{args.start_number}_{args.end_number}.json"
+#    output_file = f"{args.output_dir}/train_dataset_{args.start_number}_{args.end_number}.json"
+    output_file = f"{args.output_dir}/train_dataset.json"
     results = create_labeled_data_for_multiple_questions(
         filtered_results=filtered_outputs,
         questions_data=questions_data,
