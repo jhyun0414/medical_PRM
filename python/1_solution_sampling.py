@@ -232,24 +232,24 @@ def generate_solutions_with_labels(questions_data, repeat_count, llm, sampling_p
 def parse_args():
     parser = argparse.ArgumentParser(description="(Step 1) Generate multiple solutions with basic ORM labeling.")
     parser.add_argument("--hf_token", type=str, required=True, help="Hugging Face access token.")
-    parser.add_argument("--model_path", type=str, default="meta-llama/Llama-3.2-3B-Instruct",
+    parser.add_argument("--model_path", type=str, required=True,
                         help="Path or name of the LLM model.")
-    parser.add_argument("--repeat_count", type=int, default=8,
+    parser.add_argument("--repeat_count", type=int, required=True,
                         help="Number of times to generate for each prompt.")
-    parser.add_argument("--temperature", type=float, default=0.7,
+    parser.add_argument("--temperature", type=float, required=True,
                         help="Sampling temperature.")
-    parser.add_argument("--top_k", type=int, default=50, help="Top-k value.")
-    parser.add_argument("--top_p", type=float, default=0.9, help="Top-P value.")
-    parser.add_argument("--max_tokens", type=int, default=512, help="Max tokens for generation.")
+    parser.add_argument("--top_k", type=int, required=True, help="Top-k value.")
+    parser.add_argument("--top_p", type=float, required=True, help="Top-P value.")
+    parser.add_argument("--max_tokens", type=int, required=True, help="Max tokens for generation.")
     parser.add_argument("--input_file", type=str, required=True,
                         help="Input JSON file (contains question info).")
     parser.add_argument("--output_file", type=str, required=True,
                         help="Output JSON file (structured data with solutions).")
-    parser.add_argument("--start_number", type=int, default=0,
+    parser.add_argument("--start_number", type=int, required=True,
                         help="Start index (inclusive) of questions to process.")
-    parser.add_argument("--end_number", type=int, default=10,
+    parser.add_argument("--end_number", type=int, required=True,
                         help="End index (exclusive) of questions to process.")
-    parser.add_argument("--gpu_ids", type=str, default="0",
+    parser.add_argument("--gpu_ids", type=str, required=True,
                         help="Comma separated list of GPU device indices to use.")
     return parser.parse_args()
 

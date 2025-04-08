@@ -6,10 +6,7 @@ import random
 import os
 import math
 import wandb
-import shutil
 from datetime import datetime
-
-# from accelerate import Accelerator
 
 from huggingface_hub import login, create_repo
 from transformers import (
@@ -29,7 +26,8 @@ def parse_args():
     parser.add_argument("--wandb_token", type=str, help="W&B access token.")
     
     # 모델 관련 설정
-    parser.add_argument("--model_path", type=str, help="Path or name of the LLM model.")
+    parser.add_argument("--model_path", type=str, default="meta-llama/Llama-3.1-8B",
+                        help="Path or name of the base LLM model (default: Llama-3.1-8B).")
     parser.add_argument("--device", type=str, help="CUDA visible devices (e.g. '0,1')")
     parser.add_argument("--dtype", type=str, default="bfloat16", help="Data type (default: bfloat16).")
     
@@ -43,7 +41,6 @@ def parse_args():
     parser.add_argument("--num_train_epochs", type=int, help="Number of epochs.")
     parser.add_argument("--learning_rate", type=float, help="Learning rate.")
     parser.add_argument("--gradient_accumulation_steps", type=int, help="Gradient accumulation steps.")
-    
     parser.add_argument("--lr_scheduler_type", type=str, default="linear", help="Learning rate scheduler type.")
     parser.add_argument("--per_device_train_batch_size", type=int, help="Training batch size per device.")
     parser.add_argument("--bf16", type=bool, default=True, help="Whether to use bf16 training.")
@@ -52,8 +49,8 @@ def parse_args():
     
     parser.add_argument("--train_label", type=str, 
                        choices=["prm_soft_label", "prm_hard_label", "er_label", "gemini_label", "llama_label"],
-                       help="Which training label to use.")
-    parser.add_argument("--risk_param", type=float, default=0.0,
+                       help="Which training label to use. 'er_label' will be computed from soft label with risk_param.")
+    parser.add_argument("--risk_param", type=float,
                        help="Entropic risk parameter (mu) for converting soft labels to ER labels.")
     
     # ✨ 필터링 여부 추가 ✨
@@ -63,9 +60,8 @@ def parse_args():
     return parser.parse_args()
 
 
-def load_model(model_name="meta-llama/Llama-3.1-8B-Instruct", dtype="bfloat16"):
+def load_model(model_name="meta-llama/Llama-3.1-8B", dtype="bfloat16"):
     print("Loading model...")
-    
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
@@ -75,7 +71,6 @@ def load_model(model_name="meta-llama/Llama-3.1-8B-Instruct", dtype="bfloat16"):
     )
     model.gradient_checkpointing_enable()
     
-    # pad_token이 없는 모델(예: LLaMA 계열)을 위해 처리
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
@@ -91,6 +86,7 @@ def process_all_results_to_dataset(all_results, tokenizer, step_tag_id=128256):
         'values': []
     }
     error_count = 0
+    
     for entry in all_results:
         question_id = entry.get("question_id", "unknown")
         solution_index = entry.get("solution_index", "unknown")
@@ -110,17 +106,16 @@ def process_all_results_to_dataset(all_results, tokenizer, step_tag_id=128256):
         attention_mask = encode['attention_mask'].copy()
         attention_mask.append(0)
         
-        # 라벨 부분
-        raw_label = raw_text.replace(" ки", " +")
+        # 라벨 텍스트
+        raw_label = raw_text.replace(" ки", "<good_step>")
         reference_labels = tokenizer(raw_label, add_special_tokens=True)['input_ids']
         reference_labels.insert(0, tokenizer.pad_token_id)
         reference_labels[0] = -100
         
+        ann = entry.get('annotation', [])
         value_list = []
         counter = 0
-        ann = entry.get('annotation', [])
         
-        # 길이 불일치 확인
         if len(reference_labels) != len(new_encode_id):
             print(f"[ERROR] Mismatched lengths for question_id: {question_id}, solution_index: {solution_index}. "
                   f"Labels length: {len(reference_labels)}, Input_ids length: {len(new_encode_id)}. Skipping entry.")
@@ -174,6 +169,7 @@ def process_gemini_label(label_list):
             processed_label.append(val)
             if val == 0:
                 found_zero = True
+    
     return processed_label
 
 
@@ -190,12 +186,6 @@ def format_question_with_options(item):
 
 
 def load_json_and_create_dataset_from_data(data, tokenizer, step_tag_id=128256, args=None):
-    SYSTEM_PROMPT = (
-        "You are an evaluator assessing the quality of reasoning in each step of an given explanation. "
-        "If the reasoning in a step is logical and valid, output + after that step. "
-        "If the reasoning contains errors, output - after that step."
-    )
-    
     all_results = []
     for idx, item in enumerate(data):
         question_id = item.get("question_id", f"question_{idx}")
@@ -206,6 +196,7 @@ def load_json_and_create_dataset_from_data(data, tokenizer, step_tag_id=128256, 
             continue
         
         for sol_idx, sol in enumerate(solutions):
+            # (1) label 타입별 처리
             if args.train_label == "er_label":
                 original_soft = sol.get("prm_soft_label", [])
                 if not isinstance(original_soft, list):
@@ -230,16 +221,7 @@ def load_json_and_create_dataset_from_data(data, tokenizer, step_tag_id=128256, 
                     new_label = [new_label]
             
             solution_text = sol.get("prm_processed_solution", "")
-            messages = [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": formatted_question + solution_text}
-            ]
-            
-            raw_text = tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-                add_generation_prompt=True
-            )
+            raw_text = f"{formatted_question}\n{solution_text}"
             
             new_entry = {
                 "query": raw_text,
@@ -257,6 +239,7 @@ def load_json_and_create_dataset_from_data(data, tokenizer, step_tag_id=128256, 
     return dataset_dict
 
 
+# ✨ 변경된 split_json_data: do_filtering 인자를 받아 필터링 수행 ✨
 def split_json_data(json_path, train_ratio=0.98, args=None):
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -273,19 +256,18 @@ def split_json_data(json_path, train_ratio=0.98, args=None):
                 continue
             
             solutions = item["solutions"]
-            
             orm_0_solutions = []
             orm_1_solutions = []
             
             for sol in solutions:
                 orm_label_val = sol.get("orm_label", 0)
                 if orm_label_val == 0:
-                    # er_label이면 0/1 체크 안함
+                    # ER 레이블이면 0/1 체크 제외
                     if args.train_label == "er_label":
                         orm_0_solutions.append(sol)
                         continue
                     
-                    # gemini/hard/soft/llama
+                    # gemini/hard/soft/llama 구분
                     if args.train_label == "gemini_label":
                         arr = sol.get("prm_gemini_label", [])
                         if not isinstance(arr, list):
@@ -297,11 +279,11 @@ def split_json_data(json_path, train_ratio=0.98, args=None):
                             arr = [arr]
                         arr = process_gemini_label(arr)
                     else:
-                        # soft/hard
                         arr = sol.get(args.train_label, [])
                         if not isinstance(arr, list):
                             arr = [arr]
                     
+                    # 0이 하나라도 있으면 남김
                     if any(x == 0 for x in arr):
                         orm_0_solutions.append(sol)
                     else:
@@ -310,9 +292,9 @@ def split_json_data(json_path, train_ratio=0.98, args=None):
                 else:
                     orm_1_solutions.append(sol)
             
+            # 0 솔루션 수만큼 1 솔루션을 남기는데, 최소 2개는 남김
             remain_0_count = len(orm_0_solutions)
             need_1_count = max(remain_0_count, 2)
-            
             keep_1_solutions = orm_1_solutions[:need_1_count]
             
             item["solutions"] = orm_0_solutions + keep_1_solutions
@@ -334,8 +316,9 @@ class AutoRegressiveTrainer(Trainer):
         labels = labels[..., 1:].contiguous()
         values = inputs['values'][..., 1:].contiguous().to(torch.bfloat16)
         
-        plus_id = self.my_tokenizer.encode(' +')[-1]
-        minus_id = self.my_tokenizer.encode(' -')[-1]
+        plus_id = self.my_tokenizer.encode('<good_step>')[-1]
+        minus_id = self.my_tokenizer.encode('<bad_step>')[-1]
+        
         plus_logits = logits[:, :, plus_id]
         minus_logits = logits[:, :, minus_id]
         
@@ -364,6 +347,7 @@ class AutoRegressiveTrainer(Trainer):
 def main():
     args = parse_args()
     
+    # GPU 설정
     os.environ["CUDA_VISIBLE_DEVICES"] = args.device
 
     # 1. 로그인
@@ -371,27 +355,28 @@ def main():
     wandb.login(key=args.wandb_token)
     print("1: Login Success")
 
-    # 2. 모델 로드
+    # 2. 모델 불러오기
     model, tokenizer = load_model(model_name=args.model_path, dtype=args.dtype)
     print("2: Model Loading Success")
 
-    # 추가 스페셜 토큰
-    special_tokens = {"additional_special_tokens": [" ки"]}
+    # 스페셜 토큰 추가
+    special_tokens = {"additional_special_tokens": [" ки", "<good_step>", "<bad_step>"]}
     tokenizer.add_special_tokens(special_tokens)
     model.resize_token_embeddings(len(tokenizer))
 
     step_tag = 'ки'
     step_tag_id = tokenizer.encode(f" {step_tag}")[-1]
-    plus_tag_id = tokenizer.encode(' +')[-1]
-    minus_tag_id = tokenizer.encode(' -')[-1]
-    print("Step tag ID:", step_tag_id)
-    print("Plus tag ID:", plus_tag_id)
-    print("Minus tag ID:", minus_tag_id)
+    plus_tag_id = tokenizer.encode('<good_step>')[-1]
+    minus_tag_id = tokenizer.encode('<bad_step>')[-1]
 
-    # 3. 데이터 준비
+    print("Step tag ID:", step_tag_id)
+    print("Good step ID:", plus_tag_id)
+    print("Bad step  ID:", minus_tag_id)
+
+    # 3. 데이터 준비 (필터링 포함)
     train_data, valid_data = split_json_data(args.train_json, train_ratio=args.train_ratio, args=args)
-    train_dict = load_json_and_create_dataset_from_data(train_data, tokenizer, step_tag_id=128256, args=args)
-    valid_dict = load_json_and_create_dataset_from_data(valid_data, tokenizer, step_tag_id=128256, args=args)
+    train_dict = load_json_and_create_dataset_from_data(train_data, tokenizer, step_tag_id=step_tag_id, args=args)
+    valid_dict = load_json_and_create_dataset_from_data(valid_data, tokenizer, step_tag_id=step_tag_id, args=args)
 
     train_dataset = Dataset.from_dict(train_dict)
     valid_dataset = Dataset.from_dict(valid_dict)
@@ -428,14 +413,16 @@ def main():
 
     # 4. Trainer 설정
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
     model_name = args.model_path.split("/")[-1]
-    os.makedirs(args.output_dir, exist_ok=True)
+    specific_output_dir = f"{args.output_dir}"
+    os.makedirs(specific_output_dir, exist_ok=True)
     
     if not args.run_name:
-        args.run_name = f"{model_name}_{args.train_label}_{args.learning_rate}"
-    
+        args.run_name = f"finetune_{model_name}_{args.train_label}_{args.learning_rate}"
+
     training_args = TrainingArguments(
-        output_dir=args.output_dir,
+        output_dir=specific_output_dir,
         eval_strategy="epoch",
         per_device_train_batch_size=args.per_device_train_batch_size,
         per_device_eval_batch_size=1,
@@ -469,34 +456,22 @@ def main():
     print("4: Finetuning Ready")
 
     # 5. Fine-tuning
-    print(f"Fine-tuning 시작... (lr: {args.learning_rate}, filter: {args.do_filtering}, risk_param: {args.risk_param})")
+    print(f"Fine-tuning 시작... (learning rate: {args.learning_rate}, risk_param(mu): {args.risk_param}, do_filtering: {args.do_filtering})")
     finetuner.train()
     print("Fine-tuning 완료!")
 
-    finetuner.save_model(args.output_dir)
-    tokenizer.save_pretrained(args.output_dir)
-    print(f"모델이 {args.output_dir}에 저장되었습니다.")
+    # 6. 모델 저장
+    finetuner.save_model(specific_output_dir)
+    tokenizer.save_pretrained(specific_output_dir)
+    print(f"모델이 {specific_output_dir}에 저장되었습니다.")
 
-    # 6. Hugging Face Hub 업로드
+    # 7. Hugging Face Hub 업로드
     date_str = datetime.now().strftime("%Y%m%d")
-    base_model_name = args.model_path.split("/")[-1]
-    
-    # filtering 문자열
-    filter_str = "filter" if args.do_filtering.lower() == "yes" else "nofilter"
-    # repo 이름: "user/날짜-base_model-라벨-filtering-에폭-lr"
-    repo_name = f"jhyun0414/{date_str}-{base_model_name}-{args.train_label}-{filter_str}-e{args.num_train_epochs}-lr{args.learning_rate}"
-    
+    repo_name = f"jhyun0414/{date_str}-{model_name}-{args.train_label}-{args.risk_param}"
     create_repo(repo_name, exist_ok=True, private=False)
     finetuner.model.push_to_hub(repo_name)
     tokenizer.push_to_hub(repo_name)
     print(f"🚀 모델 업로드 완료! 🔗 확인: https://huggingface.co/{repo_name}")
-
-    # 7. 업로드 후 로컬 디렉터리 삭제(용량 절약)
-    try:
-        shutil.rmtree(args.output_dir)
-        print(f"로컬 디렉터리({args.output_dir})가 성공적으로 삭제되었습니다.")
-    except Exception as e:
-        print(f"디렉터리 삭제 중 오류 발생: {e}")
 
 
 if __name__ == "__main__":

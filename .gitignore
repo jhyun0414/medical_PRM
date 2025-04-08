@@ -10,10 +10,11 @@ wandb/
 **/wandb/
 shell/wandb/
 
+*.ipynb
+
 # 모델 및 데이터 파일
 model/
-dataset_sample/*.json
-dataset_sample/raw_*.json
+*.json
 
 # Python 관련 파일
 __pycache__/
