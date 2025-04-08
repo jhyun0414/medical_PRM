@@ -25,6 +25,7 @@ fi
 # Hugging Face 및 W&B 토큰 설정
 hf_token="$HF_TOKEN"
 wandb_token="$WANDB_TOKEN"
+do_filtering="no"
 
 model_name="meta-llama/Llama-3.1-8B-Instruct"
 # GPU 설정 (각 GPU에 다른 라벨 할당)

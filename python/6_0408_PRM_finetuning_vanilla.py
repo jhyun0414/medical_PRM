@@ -7,7 +7,7 @@ import os
 import math
 import wandb
 from datetime import datetime
-
+import shutil
 from huggingface_hub import login, create_repo
 from transformers import (
     AutoModelForCausalLM,
@@ -460,18 +460,30 @@ def main():
     finetuner.train()
     print("Fine-tuning 완료!")
 
-    # 6. 모델 저장
     finetuner.save_model(specific_output_dir)
     tokenizer.save_pretrained(specific_output_dir)
     print(f"모델이 {specific_output_dir}에 저장되었습니다.")
 
-    # 7. Hugging Face Hub 업로드
+    # 6. Hugging Face Hub 업로드
     date_str = datetime.now().strftime("%Y%m%d")
-    repo_name = f"jhyun0414/{date_str}-{model_name}-{args.train_label}-{args.risk_param}"
+    base_model_name = args.model_path.split("/")[-1]
+    
+    # filtering 문자열
+    filter_str = "filter" if args.do_filtering.lower() == "yes" else "nofilter"
+    # repo 이름: "user/날짜-base_model-라벨-filtering-에폭-lr"
+    repo_name = f"jhyun0414/{date_str}-{base_model_name}-{args.train_label}-{filter_str}-e{args.num_train_epochs}-lr{args.learning_rate}"
+    
     create_repo(repo_name, exist_ok=True, private=False)
     finetuner.model.push_to_hub(repo_name)
     tokenizer.push_to_hub(repo_name)
     print(f"🚀 모델 업로드 완료! 🔗 확인: https://huggingface.co/{repo_name}")
+
+    # 7. 업로드 후 로컬 디렉터리 삭제(용량 절약)
+    try:
+        shutil.rmtree(specific_output_dir)
+        print(f"로컬 디렉터리({specific_output_dir})가 성공적으로 삭제되었습니다.")
+    except Exception as e:
+        print(f"디렉터리 삭제 중 오류 발생: {e}")
 
 
 if __name__ == "__main__":
