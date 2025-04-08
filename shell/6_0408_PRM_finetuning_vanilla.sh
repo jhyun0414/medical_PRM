@@ -26,7 +26,7 @@ fi
 gpu="0"
 dataset_path="../dataset/2_train_dataset.json"
 
-##### 세부 실험 설정정
+##### 세부 실험 설정
 model_name="OpenMeditron/Meditron3-8B"
 do_filtering="no"
 train_labels=("gemini_label" "prm_soft_label")

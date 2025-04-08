@@ -2,71 +2,55 @@
 # -*- coding: utf-8 -*-
 
 import os
-import argparse
 from huggingface_hub import hf_hub_download
 from pathlib import Path
-import json
+import shutil
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Hugging Face 데이터셋 다운로더")
-    parser.add_argument("--output_dir", type=str, default="../dataset", 
-                        help="데이터셋을 저장할 디렉토리 경로")
-    parser.add_argument("--hf_token", type=str, default=None,
-                        help="Hugging Face API 토큰 (필요한 경우)")
-    return parser.parse_args()
-
-def download_dataset(repo_id, filename, output_dir, token=None):
-    """Hugging Face Hub에서 데이터셋 파일을 다운로드합니다."""
-    try:
-        print(f"[INFO] '{repo_id}'에서 '{filename}' 다운로드 중...")
-        output_path = hf_hub_download(
-            repo_id=repo_id,
-            filename=filename,
-            token=token,
-            repo_type="dataset",
-            local_dir=output_dir,
-            local_dir_use_symlinks=False
-        )
-        print(f"[SUCCESS] 파일이 성공적으로 다운로드되었습니다: {output_path}")
-        return output_path
-    except Exception as e:
-        print(f"[ERROR] 다운로드 실패: {e}")
-        return None
+def load_env_file(env_path="../.env"):
+    """
+    .env 파일이 존재하면, KEY=VALUE 형태의 내용을 읽어
+    os.environ에 주입합니다.
+    """
+    if os.path.isfile(env_path):
+        print(f"[INFO] .env 파일을 로드합니다: {env_path}")
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                key, value = line.split("=", 1)
+                os.environ[key.strip()] = value.strip()
 
 def main():
-    args = parse_args()
-    
-    # 환경 변수에서 토큰 가져오기 (명령줄 인수로 제공되지 않은 경우)
-    token = args.hf_token or os.environ.get("HF_TOKEN")
-    
-    # 출력 디렉토리 생성
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # 다운로드할 데이터셋 정의
-    datasets = [
-        {"repo_id": "jhyun0414/raw_train_dataset", "filename": "raw_train_dataset.json"},
-        {"repo_id": "jhyun0414/raw_sample_train_dataset", "filename": "raw_sample_train_dataset.json"}
-    ]
-    
-    # 데이터셋 다운로드
-    downloaded_files = []
-    for dataset in datasets:
-        file_path = download_dataset(
-            repo_id=dataset["repo_id"],
-            filename=dataset["filename"],
-            output_dir=output_dir,
-            token=token
+    # 1) 환경변수에서 토큰 불러오기
+    load_env_file("../.env")
+    hf_token = os.environ.get("HF_TOKEN")
+
+    # 2) 출력 경로 설정
+    output_path = Path("../dataset/2_train_dataset.json")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # 3) 다운로드 수행
+    repo_id = "jhyun0414/train_dataset"
+    filename = "sample_dataset_50.json"
+
+    print(f"[INFO] Hugging Face에서 {repo_id}/{filename} 파일 다운로드 중...")
+
+    try:
+        downloaded_path = hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            token=hf_token,
+            repo_type="dataset",
+            local_dir_use_symlinks=False
         )
-        if file_path:
-            downloaded_files.append(file_path)
-    
-    # 다운로드 결과 요약
-    print("\n===== 다운로드 요약 =====")
-    print(f"총 다운로드 파일 수: {len(downloaded_files)}")
-    for file_path in downloaded_files:
-        print(f"- {file_path}")
-    print("========================")
+
+        # 4) 원하는 경로로 복사 (이름 변경)
+        shutil.copy(downloaded_path, output_path)
+        print(f"[SUCCESS] 파일이 {output_path}로 저장되었습니다.")
+
+    except Exception as e:
+        print(f"[ERROR] 다운로드 실패: {e}")
 
 if __name__ == "__main__":
     main()
