@@ -23,14 +23,19 @@ else
   wandb_token="$WANDB_TOKEN"
 fi
 
-model_name="OpenMeditron/Meditron3-8B"
-# GPU 설정 (하나의 GPU만 사용)
 gpu="0"
+dataset_path="../dataset/2_train_dataset.json"
+
+##### 세부 실험 설정정
+model_name="OpenMeditron/Meditron3-8B"
+do_filtering="no"
+train_labels=("gemini_label" "prm_soft_label")
+num_train_epochs=1
+learning_rate=2e-6
+
 
 ##### 다음에는 dataset_path 변경해야함.
-dataset_path="../dataset/2_train_dataset.json"
 base_output_dir="../model"
-num_train_epochs=1
 lr_scheduler_type="cosine"
 per_device_train_batch_size=1
 gradient_accumulation_steps=64
@@ -40,13 +45,11 @@ save_steps=50000
 dtype="bfloat16"
 
 # 학습에 사용할 라벨 종류 (2종)
-train_labels=("gemini_label" "prm_soft_label")
-learning_rate=2e-6
+
 # 엔트로픽 리스크 계산을 위한 hyperparameter (mu)
 risk_param=5.0
 
 # ✨ 필터링 여부 (yes / no) 셸 스크립트에서 지정
-do_filtering="no"
 
 # 로그 디렉토리 생성 및 로그 파일 경로 설정
 log_dir="../logs"
