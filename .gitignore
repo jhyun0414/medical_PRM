@@ -53,3 +53,5 @@ env/
 
 retriever/
 
+/model_train/*
+!/model_train/.gitkeep
