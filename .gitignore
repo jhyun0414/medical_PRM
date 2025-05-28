@@ -1,0 +1,55 @@
+# 민감한 정보가 있는 환경 변수 파일
+.env
+
+# 로그 파일
+logs/
+*.log
+
+# wandb 관련 파일
+wandb/
+**/wandb/
+shell/wandb/
+
+*.ipynb
+
+# 모델 및 데이터 파일
+model/
+*.json
+
+*.pem
+
+# Python 관련 파일
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 가상 환경
+venv/
+ENV/
+env/
+
+# 에디터 관련 파일
+.idea/
+.vscode/
+*.swp
+*.swo 
+
+retriever/
+
