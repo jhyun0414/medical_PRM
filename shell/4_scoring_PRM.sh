@@ -4,8 +4,8 @@
 # Load Environment Variables
 ############################################
 # Load environment variables from .env file
-if [ -f "../.env" ]; then
-  source "../.env"
+if [ -f ".env" ]; then
+  source ".env"
 fi
 
 # Exit if environment variables are not set
@@ -26,14 +26,14 @@ USE_ORM="no"
 PROCESS_SOLUTION_NUM=64
 
 MODEL_PATHS=(
-"../model_train/llama-3.1-medprm-reward-v1.0"
+"model_train/llama-3.1-medprm-reward-v1.0"
 )
-INPUT_JSON="../dataset/dataset_3_sampled_dataset/llama-3.1-medprm-reward-test-set/2_test_dataset.json"
+INPUT_JSON="dataset/dataset_3_sampled_dataset/llama-3.1-medprm-reward-test-set/2_test_dataset.json"
 # GPU number array for each model
 GPUS=(0)
 
 # Set output directory
-OUTPUT_DIR="../dataset/dataset_4_scored_dataset"
+OUTPUT_DIR="dataset/dataset_4_scored_dataset"
 
 # Set maximum token length (1024 for other PRMs, 4096 for RAG-PRM)
 MAX_TOKEN_LEN=4096
@@ -42,7 +42,7 @@ MAX_TOKEN_LEN=4096
 INCLUDE_OPTIONS="no"
 
 # Create log directory
-LOG_DIR="../logs"
+LOG_DIR="logs"
 mkdir -p "$LOG_DIR"
 mkdir -p "$OUTPUT_DIR"
 
@@ -74,7 +74,7 @@ for i in "${!MODEL_PATHS[@]}"; do
  
 #        --data_source_list "$DATA_SOURCE_LIST" \
     # Pass single GPU number as --device argument to run on specified GPU
-    python ../python/2_test.py \
+    python python/4_scoring_PRM.py \
         --model_save_path "$MODEL_PATH" \
         --input_json_file "$INPUT_JSON" \
         --output_json_file "$OUTPUT_JSON" \

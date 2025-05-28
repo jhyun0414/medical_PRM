@@ -9,13 +9,13 @@ if [ -z "$HF_TOKEN" ]; then
   exit 1
 fi
 
-MODEL_PATH="../model_downloaded/llama_3.1_8b_instruct"
+MODEL_PATH="./model_downloaded/llama_3.1_8b_instruct"
 
 # Input file specification
-INPUT_FILE="../dataset/dataset_2_raw_test_dataset/0527_final_raw_test_dataset.json"
+INPUT_FILE="./dataset/dataset_2_raw_test_dataset/0527_final_raw_test_dataset.json"
 
 # Output directory for results
-OUTPUT_DIR="../dataset/dataset_3_sampled_dataset"
+OUTPUT_DIR="./dataset/dataset_3_sampled_dataset"
 
 # Specify data sources to process (comma-separated) / Process all if empty
 # DATA_SOURCE_LIST=""

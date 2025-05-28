@@ -3,7 +3,9 @@
 # Load Environment Variables
 ##############################################################################
 # Load environment variables from .env file
-if [ -f "../.env" ]; then
+if [ -f ".env" ]; then
+  source ".env"
+elif [ -f "../.env" ]; then
   source "../.env"
 fi
 
@@ -44,8 +46,8 @@ wandb_project="Med-PRM"
 # Model path settings
 model_name="meta-llama/Llama-3.1-8B-Instruct"
 # Path settings
-dataset_path="../dataset/dataset_1_train_dataset/llama-3.1-medprm-reward-training-set/1_train_dataset.json"
-base_output_dir="../model_train"
+dataset_path="dataset/dataset_1_train_dataset/llama-3.1-medprm-reward-training-set/1_train_dataset.json"
+base_output_dir="model_train"
 
 # Check if dataset file exists
 if [ ! -f "$dataset_path" ]; then
@@ -76,7 +78,7 @@ risk_param=5.0
 
 
 # Create log directory
-log_dir="../logs"
+log_dir="logs"
 mkdir -p $log_dir
 
 ##############################################################################
@@ -91,7 +93,7 @@ run_name="finetune_${model_name}_${train_label}_filter_${do_filtering}_ep${num_t
 log_file="${log_dir}/TRAIN_${train_label}_${learning_rate}_${timestamp}-RAG_${use_rag}.log"
 
 # Check Python script path
-python_script="../python/1_train.py"
+python_script="python/2_train.py"
 
 # Log start message
 echo "1: Training started" > "$log_file"
