@@ -26,14 +26,14 @@ USE_ORM="no"
 PROCESS_SOLUTION_NUM=64
 
 MODEL_PATHS=(
-"../model_downloaded/RAG_PRM_Q_GS"
+"../model_train/llama-3.1-medprm-reward-v1.0"
 )
-INPUT_JSON="/hdd3/jaehoon/sampling/dataset_re/final_raw_test_dataset_with_related_docs_results_medqa_prm_rs_sft_7k_med_qa_64.json"
+INPUT_JSON="../dataset/dataset_3_sampled_dataset/llama-3.1-medprm-reward-test-set/2_test_dataset.json"
 # GPU number array for each model
 GPUS=(0)
 
 # Set output directory
-OUTPUT_DIR="../dataset_result"
+OUTPUT_DIR="../dataset/dataset_4_scored_dataset"
 
 # Set maximum token length (1024 for other PRMs, 4096 for RAG-PRM)
 MAX_TOKEN_LEN=4096

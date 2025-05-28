@@ -44,7 +44,7 @@ wandb_project="Med-PRM"
 # Model path settings
 model_name="meta-llama/Llama-3.1-8B-Instruct"
 # Path settings
-dataset_path="../dataset/1_train_dataset.json"
+dataset_path="../dataset/dataset_1_train_dataset/llama-3.1-medprm-reward-training-set/1_train_dataset.json"
 base_output_dir="../model_train"
 
 # Check if dataset file exists
